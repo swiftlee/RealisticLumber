@@ -1,0 +1,5 @@
+name: RealisticLumber
+version: ${project.version}
+main: com.phaseos.realisticlumber.RealisticLumber
+authors: [SwiftLee]
+description: Timber!

@@ -1,0 +1,5 @@
+name: RealisticLumber
+version: 1.0-SNAPSHOT
+main: com.phaseos.realisticlumber.RealisticLumber
+authors: [SwiftLee]
+description: Timber!
