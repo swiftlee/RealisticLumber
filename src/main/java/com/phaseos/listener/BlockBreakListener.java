@@ -2,20 +2,21 @@ package com.phaseos.listener;
 
 import com.phaseos.realisticlumber.RealisticLumber;
 
-import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
-import org.bukkit.entity.FallingBlock;
+import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.material.MaterialData;
-import org.bukkit.util.Vector;
+import org.bukkit.inventory.ItemStack;
 
-import java.util.HashMap;
-import java.util.logging.Level;
+import java.lang.reflect.Array;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 
 /*************************************************************************
  *
@@ -37,372 +38,464 @@ import java.util.logging.Level;
  */
 public class BlockBreakListener implements Listener {
 
+    public static Player pubPlayer = null;
     private RealisticLumber plugin;
+    private int leafRadius;
 
     public BlockBreakListener(RealisticLumber plugin) {
         this.plugin = plugin;
     }
 
-    @EventHandler
-    public void onBlockBreak(BlockBreakEvent e) {
-        Block block = e.getBlock();
-        Material type = block.getType();
-        if (String.valueOf(type).toLowerCase().contains("log")) {
-            Player player = e.getPlayer();
-            blockBreak(block, player.getLocation());
+    private boolean isLogBlock(Material mat) {
+        if ((mat == Material.ACACIA_LOG) || (mat == Material.BIRCH_LOG) || (mat == Material.DARK_OAK_LOG) || (mat == Material.JUNGLE_LOG) || (mat == Material.OAK_LOG) || (mat == Material.SPRUCE_LOG)) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isLeavesBlock(Material mat) {
+        if ((mat == Material.OAK_LEAVES) || (mat == Material.ACACIA_LEAVES) || (mat == Material.BIRCH_LEAVES) || (mat == Material.DARK_OAK_LEAVES) || (mat == Material.JUNGLE_LEAVES) || (mat == Material.SPRUCE_LEAVES)) {
+            return true;
+        }
+        return false;
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onBlockBreak(BlockBreakEvent event) {
+        if (event.isCancelled()) {
+            return;
+        }
+        Block block = event.getBlock();
+        if (isLogBlock(block.getType())) {
+            event.setCancelled(true);
+            if (chop(event.getBlock(), event.getPlayer(), event.getBlock().getWorld())) {
+                if ((!plugin.moreDamageToTools) &&
+                        (breaksTool(event.getPlayer(), event.getPlayer().getItemInHand()))) {
+                    event.getPlayer().getInventory().clear(event.getPlayer().getInventory().getHeldItemSlot());
+                }
+            } else {
+                event.setCancelled(false);
+            }
         }
     }
 
-    public void blockBreak(Block breakBlock, Location playerLocation) {
-        Material breakBlockType = breakBlock.getType();
-        Location breakBlockLocation = breakBlock.getLocation();
-
-        int treeId = 0;
-        if (String.valueOf(breakBlockType).toLowerCase().contains("log"))
-            treeId = 1;
-
-        if (breakBlock.getMetadata("TreeId").iterator().hasNext()) {
-            treeId = breakBlock.getMetadata("TreeId").iterator().next().asInt();
-        }
-        World world = breakBlock.getWorld();
-        Vector direction = new Vector(playerLocation.getX() - breakBlockLocation.getX(), 0, playerLocation.getZ() - breakBlockLocation.getZ());
-        direction.normalize();
-        float angle = direction.angle(new Vector(0, 0, 1));
-        // double angle2 = angle * 180 / Math.PI;
-        int angle1 = 90;
-        if (direction.getX() > 0) {
-            if (angle > Math.PI * 1 / 4)
-                angle1 = 180;
-            if (angle > Math.PI * 3 / 4)
-                angle1 = 270;
+    public boolean chop(Block block, Player player, World world) {
+        List<Block> blocks = new LinkedList<>();
+        Block highest = getHighestLog(block);
+        if (isTree(highest, player, block)) {
+            getBlocksToChop(block, highest, blocks);
+            if (plugin.logsMoveDown) {
+                moveDownLogs(block, blocks, world, player);
+            } else {
+                popLogs(block, blocks, world, player);
+            }
         } else {
-            if (angle > Math.PI * 1 / 4)
-                angle1 = 0;
-            if (angle > Math.PI * 3 / 4)
-                angle1 = 270;
+            return false;
         }
-        switch (angle1) {
-            case 0:
-                direction.setX(0);
-                direction.setZ(1);
-                break;
-            case 90:
-                direction.setX(1);
-                direction.setZ(0);
-                break;
-            case 180:
-                direction.setX(0);
-                direction.setZ(-1);
-                break;
-            case 270:
-                direction.setX(-1);
-                direction.setZ(0);
-                break;
-        }
-        // player.sendMessage("angle: "+ angle1 + " " + angle2 + "^ " + angle +
-        // " x:" + direction.getX() + " z:" + direction.getZ());
-        // player.sendMessage("direction: "+ direction.toString());
+        return true;
+    }
 
-        HashMap<Location, Block> tree = new HashMap<>();
-        HashMap<Location, Block> solid = new HashMap<>();
-        HashMap<Location, Block> search = new HashMap<>();
-        search.put(breakBlockLocation, breakBlock);
-
-        // filling tree
-        boolean findNext = true;
-        int limit = 0;
-        while (findNext) {
-            findNext = false;
-            HashMap<Location, Block> newSearch = new HashMap<>();
-            for (java.util.Map.Entry<Location, Block> pairs : search.entrySet()) {
-                Location l = pairs.getKey();
-                java.util.Map<Location, Block> near = getNearBlocks(l, 1);
-                for (java.util.Map.Entry<Location, Block> nearPairs : near.entrySet()) {
-                    Location nearLocation = nearPairs.getKey();
-                    Block nearBlock = nearPairs.getValue();
-                    if (nearBlock.getType().toString().toLowerCase().contains("log")) {
-                        if (!tree.containsKey(nearLocation)) {
-                            Boolean put = false;
-                            if (treeId == 0 && nearBlock.getMetadata("TreeId").isEmpty())
-                                put = true;
-                            if (treeId == 1)
-                                put = true;
-                            if (treeId != 0) {
-                                if (nearBlock.getMetadata("TreeId").iterator().hasNext() && nearBlock.getMetadata("TreeId").iterator().next().asInt() == treeId) {
-                                    put = true;
-                                }
-                            }
-                            if (put) {
-                                tree.put(nearLocation, nearBlock);
-                                newSearch.put(nearLocation, nearBlock);
-                                findNext = true;
-                            }
-                        }
-                    }
-                    if (!nearBlock.getType().toString().toLowerCase().contains("log")) {
-                        solid.put(nearLocation, nearBlock);
-                        // player.sendMessage("SolidBlock : " +
-                        // nearBlock.getType());
-                    }
-
+    public void getBlocksToChop(Block block, Block highest, List<Block> blocks) {
+        while (block.getY() <= highest.getY()) {
+            if (!blocks.contains(block)) {
+                blocks.add(block);
+            }
+            getBranches(block, blocks, block.getRelative(BlockFace.NORTH));
+            getBranches(block, blocks, block.getRelative(BlockFace.NORTH_EAST));
+            getBranches(block, blocks, block.getRelative(BlockFace.EAST));
+            getBranches(block, blocks, block.getRelative(BlockFace.SOUTH_EAST));
+            getBranches(block, blocks, block.getRelative(BlockFace.SOUTH));
+            getBranches(block, blocks, block.getRelative(BlockFace.SOUTH_WEST));
+            getBranches(block, blocks, block.getRelative(BlockFace.WEST));
+            getBranches(block, blocks, block.getRelative(BlockFace.NORTH_WEST));
+            if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH))) {
+                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH));
+            }
+            if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_EAST))) {
+                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_EAST));
+            }
+            if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST))) {
+                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST));
+            }
+            if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_EAST))) {
+                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_EAST));
+            }
+            if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH))) {
+                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH));
+            }
+            if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_WEST))) {
+                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_WEST));
+            }
+            if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST))) {
+                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST));
+            }
+            if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_WEST))) {
+                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_WEST));
+            }
+            if ((block.getData() == 3) || (block.getData() == 7) || (block.getData() == 11) || (block.getData() == 15)) {
+                if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH, 2))) {
+                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH, 2));
+                }
+                if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_EAST, 2))) {
+                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_EAST, 2));
+                }
+                if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST, 2))) {
+                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST, 2));
+                }
+                if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_EAST, 2))) {
+                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_EAST, 2));
+                }
+                if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH, 2))) {
+                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH, 2));
+                }
+                if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_WEST, 2))) {
+                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_WEST, 2));
+                }
+                if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST, 2))) {
+                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST, 2));
+                }
+                if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_WEST, 2))) {
+                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_WEST, 2));
                 }
             }
-            limit++;
-            if (limit > 150) {
-                plugin.getLogger().log(Level.INFO, "Tree Logs search reached BlockProcessingLimit.");
+            if ((blocks.contains(block.getRelative(BlockFace.UP))) || (!isLogBlock(block.getRelative(BlockFace.UP).getType()))) {
                 break;
             }
-            if (findNext) {
-                search.clear();
-                search.putAll(newSearch);
-            }
-
+            block = block.getRelative(BlockFace.UP);
         }
-        tree.remove(breakBlockLocation);
-        solid.remove(breakBlockLocation);
-        breakBlock.removeMetadata("TreeId", plugin);
-        // player.sendMessage("This tree contains " + tree.size() +
-        // " blocks, and connected " + solid.size() + " solid blocks");
+    }
 
-        // int logsCount = tree.size();
-
-        // defilling tree depends on solid blocks
-        search.clear();
-        search.putAll(solid);
-        findNext = true;
-        limit = 0;
-        while (findNext) {
-            findNext = false;
-            HashMap<Location, Block> newSearch = new HashMap<>();
-            for (java.util.Map.Entry<Location, Block> pairs : search.entrySet()) {
-                Location l = pairs.getKey();
-                // if (l == breakBlockLocation) continue;
-                java.util.Map<Location, Block> near = getNearBlocks(l, 1);
-                for (java.util.Map.Entry<Location, Block> nearPairs : near.entrySet()) {
-                    Location nearLocation = nearPairs.getKey();
-                    // if (nearLocation == breakBlockLocation) continue;
-                    Block nearBlock = nearPairs.getValue();
-                    if (nearBlock.getType().toString().toLowerCase().contains("log")) {
-                        if (tree.containsKey(nearLocation)) {
-                            tree.remove(nearLocation);
-                            newSearch.put(nearLocation, nearBlock);
-                            findNext = true;
-                        }
-                    }
-                }
-            }
-            limit++;
-            if (limit > 150) {
-                plugin.getLogger().log(Level.INFO, "Solid Blocks connections search reached BlockProcessingLimit.");
-                break;
-            }
-            if (findNext) {
-                search.clear();
-                search.putAll(newSearch);
-                newSearch.clear();
-            }
-
+    public void getBranches(Block block, List<Block> blocks, Block other) {
+        if ((!blocks.contains(other)) && (isLogBlock(other.getType()))) {
+            getBlocksToChop(other, getHighestLog(other), blocks);
         }
+    }
 
-        // detecting distance to ground
-        int fallingDistance;
-        for (fallingDistance = 1; fallingDistance < 50; fallingDistance++) {
-            Block newBlock = world.getBlockAt(breakBlockLocation.getBlockX(), breakBlockLocation.getBlockY() - fallingDistance, breakBlockLocation.getBlockZ());
-            Material newBlockType = newBlock.getType();
-            if (!isLightBlock(newBlockType))
-                break;
-        }
-
-        HashMap<Location, Integer> clearWay = new HashMap<>();
-
-        // falling tree
-        for (java.util.Map.Entry<Location, Block> logPairs : tree.entrySet()) {
-            Location newBlockLocation = logPairs.getKey();
-            // if (newBlockLocation == breakBlockLocation) continue;
-            Block logBlock = logPairs.getValue();
-            Material logBlockType = logBlock.getType();
-            // byte logBlockData = logBlock.getData();
-            MaterialData logBlockData = logBlock.getState().getData();
-            logBlock.setType(Material.AIR);
-            logBlock.removeMetadata("TreeId", plugin);
-
-            int horizontalDistance = newBlockLocation.getBlockY() - breakBlockLocation.getBlockY() - 1;
-            if (horizontalDistance < 0)
-                horizontalDistance = 0;
-            int verticalDistance = horizontalDistance + fallingDistance;
-            // int horisontalOffset=0;
-            int horisontalOffset = (int) Math.floor((horizontalDistance) / 1.5);
-            float horisontalSpeed = calcSpeed(horizontalDistance, verticalDistance, horisontalOffset);
-            // player.sendMessage("horizontalDistance: "+ horizontalDistance +
-            // " verticalDistance:" + verticalDistance + " fallingdistance " +
-            // fallingDistance);
-            if (fallingDistance == 1) {
-                switch (horizontalDistance) {
-                    case 1:
-                        horisontalOffset = 1;
-                        horisontalSpeed = 0;
-                        break;
-                    case 2:
-                        horisontalOffset = 1;
-                        horisontalSpeed = 0.1191f;
-                        break;
-                    case 3:
-                        horisontalOffset = 1;
-                        horisontalSpeed = 0.185f;
-                        break;
-                    case 4:
-                        horisontalOffset = 2;
-                        horisontalSpeed = 0.17f;
-                        break;
-                    case 5:
-                        horisontalOffset = 2;
-                        horisontalSpeed = 0.22f;
-                        break;
-                    case 6:
-                        horisontalOffset = 3;
-                        horisontalSpeed = 0.21f;
-                        break;
-                    case 7:
-                        horisontalOffset = 3;
-                        horisontalSpeed = 0.26f;
-                        break;
-                    case 8:
-                        horisontalOffset = 4;
-                        horisontalSpeed = 0.241f;
-                        break;
-                    case 9:
-                        horisontalOffset = 4;
-                        horisontalSpeed = 0.28f;
-                        break;
-
+    public Block getHighestLog(Block block) {
+        boolean isLog = true;
+        while (isLog) {
+            if ((isLogBlock(block.getRelative(BlockFace.UP).getType())) ||
+                    (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH).getType())) ||
+                    (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST).getType())) ||
+                    (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH).getType())) ||
+                    (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST).getType())) ||
+                    (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH).getType())) ||
+                    (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_EAST).getType())) ||
+                    (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_WEST).getType())) ||
+                    (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_EAST).getType())) ||
+                    (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_WEST).getType()))) {
+                if (isLogBlock(block.getRelative(BlockFace.UP).getType())) {
+                    block = block.getRelative(BlockFace.UP);
+                } else if (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH).getType())) {
+                    block = block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH);
+                } else if (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST).getType())) {
+                    block = block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST);
+                } else if (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH).getType())) {
+                    block = block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH);
+                } else if (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST).getType())) {
+                    block = block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST);
+                } else if (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_EAST).getType())) {
+                    block = block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_EAST);
+                } else if (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_WEST).getType())) {
+                    block = block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_WEST);
+                } else if (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_EAST).getType())) {
+                    block = block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_EAST);
+                } else if (isLogBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_WEST).getType())) {
+                    block = block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_WEST);
                 }
-            }
-            if (fallingDistance == 2) {
-                switch (horizontalDistance) {
-                    case 1:
-                        horisontalOffset = 1;
-                        horisontalSpeed = 0;
-                        break;
-                    case 2:
-                        horisontalOffset = 1;
-                        horisontalSpeed = 0.1f;
-                        break;
-                    case 5:
-                        horisontalOffset = 2;
-                        horisontalSpeed = 0.2f;
-                        break;
-
-                }
-            }
-            Vector vOffset = direction.clone().multiply(horisontalOffset);
-            newBlockLocation.add(vOffset);
-            Block testBlock = world.getBlockAt(newBlockLocation);
-            if (isLightBlock(testBlock.getType())) {
-                testBlock.breakNaturally();
             } else {
-                newBlockLocation.subtract(vOffset);
-                horisontalSpeed = calcSpeed(horizontalDistance, verticalDistance, 0);
+                isLog = false;
             }
-            FallingBlock blockFalling = world.spawnFallingBlock(newBlockLocation, logBlockType, (byte) 0); //TODO: Find a way to do this without using deprecated methods
-            blockFalling.setVelocity(direction.clone().multiply(horisontalSpeed));
+        }
+        return block;
+    }
 
-            // calc clear falling way
-            int minClearVertical = newBlockLocation.getBlockY() - verticalDistance;
-            for (int clearY = newBlockLocation.getBlockY(); clearY >= minClearVertical; clearY--) {
-                int horisontalClearDistance = (int) Math.ceil(Math.sqrt(horizontalDistance * horizontalDistance - (clearY - minClearVertical) * (clearY - minClearVertical)));
-                Location l = new Location(world, newBlockLocation.getBlockX(), clearY, newBlockLocation.getBlockZ());
-                if (clearWay.containsKey(l)) {
-                    if (clearWay.get(l) < horisontalClearDistance) {
-                        clearWay.put(l, horisontalClearDistance);
+    public boolean isTree(Block block, Player player, Block first) {
+        if (!plugin.onlyTrees) {
+            return true;
+        }
+        if (plugin.trees.containsKey(player)) {
+            Block[] blockarray = (Block[]) plugin.trees.get(player);
+            for (int counter = 0; counter < Array.getLength(blockarray); counter++) {
+                if (blockarray[counter] == block) {
+                    return true;
+                }
+                if (blockarray[counter] == first) {
+                    return true;
+                }
+            }
+        }
+        int counter = 0;
+        if (isLeavesBlock(block.getRelative(BlockFace.UP).getType())) {
+            counter++;
+        }
+        if (isLeavesBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.UP).getType())) {
+            counter++;
+        }
+        if (isLeavesBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH).getType())) {
+            counter++;
+        }
+        if (isLeavesBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH).getType())) {
+            counter++;
+        }
+        if (isLeavesBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST).getType())) {
+            counter++;
+        }
+        if (isLeavesBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST).getType())) {
+            counter++;
+        }
+        if (isLeavesBlock(block.getRelative(BlockFace.DOWN).getType())) {
+            counter++;
+        }
+        if (isLeavesBlock(block.getRelative(BlockFace.NORTH).getType())) {
+            counter++;
+        }
+        if (isLeavesBlock(block.getRelative(BlockFace.EAST).getType())) {
+            counter++;
+        }
+        if (isLeavesBlock(block.getRelative(BlockFace.SOUTH).getType())) {
+            counter++;
+        }
+        if (isLeavesBlock(block.getRelative(BlockFace.WEST).getType())) {
+            counter++;
+        }
+        if (counter >= 2) {
+            return true;
+        }
+        if (block.getData() == 1) {
+            block = block.getRelative(BlockFace.UP);
+            if (isLeavesBlock(block.getRelative(BlockFace.UP).getType())) {
+                counter++;
+            }
+            if (isLeavesBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.UP).getType())) {
+                counter++;
+            }
+            if (isLeavesBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH).getType())) {
+                counter++;
+            }
+            if (isLeavesBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH).getType())) {
+                counter++;
+            }
+            if (isLeavesBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST).getType())) {
+                counter++;
+            }
+            if (isLeavesBlock(block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST).getType())) {
+                counter++;
+            }
+            if (isLeavesBlock(block.getRelative(BlockFace.NORTH).getType())) {
+                counter++;
+            }
+            if (isLeavesBlock(block.getRelative(BlockFace.EAST).getType())) {
+                counter++;
+            }
+            if (isLeavesBlock(block.getRelative(BlockFace.SOUTH).getType())) {
+                counter++;
+            }
+            if (isLeavesBlock(block.getRelative(BlockFace.WEST).getType())) {
+                counter++;
+            }
+            if (counter >= 2) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void popLogs(Block block, List<Block> blocks, World world, Player player) {
+        ItemStack item = new ItemStack(Material.STONE, 1, (short) 0, null);
+        item.setAmount(1);
+        for (int counter = 0; counter < blocks.size(); counter++) {
+            block = blocks.get(counter);
+            item.setType(block.getType());
+            item.setDurability((short) block.getData());
+            block.breakNaturally();
+            if (plugin.popLeaves) {
+                popLeaves(block);
+            }
+            if ((plugin.moreDamageToTools) &&
+                    (breaksTool(player, player.getItemInHand()))) {
+                player.getInventory().clear(player.getInventory().getHeldItemSlot());
+                if (plugin.interruptIfToolBreaks) {
+                    break;
+                }
+            }
+        }
+    }
+
+    public void popLeaves(Block block) {
+        for (int y = -plugin.leafRadius; y < plugin.leafRadius + 1; y++) {
+            for (int x = -plugin.leafRadius; x < plugin.leafRadius + 1; x++) {
+                for (int z = -plugin.leafRadius; z < plugin.leafRadius + 1; z++) {
+                    Block target = block.getRelative(x, y, z);
+                    if (isLeavesBlock(target.getType())) {
+                        target.breakNaturally();
                     }
-                } else {
-                    clearWay.put(l, horisontalClearDistance);
                 }
             }
         }
+    }
 
-        // clear falling way
-        for (java.util.Map.Entry<Location, Integer> clearPairs : clearWay.entrySet()) {
-            Location clearBlockLocation = clearPairs.getKey();
-            int clearDistance = clearPairs.getValue();
-            // player.sendMessage("clearDistance: "+ clearDistance + " y:" +
-            // clearBlockLocation.getY());
-            for (int c = 0; c <= clearDistance; c++) {
-                Location tempClearLoc = clearBlockLocation.clone().add(direction.clone().multiply(c));
-                Block clearBlock = world.getBlockAt(tempClearLoc);
-                if (isLightBlock(clearBlock.getType())) {
-                    clearBlock.breakNaturally();
-                    clearBlock.removeMetadata("TreeId", plugin);
-                }
-            }
-        }
+    public void moveDownLogs(Block block, List<Block> blocks, World world, Player player) {
+        ItemStack item = new ItemStack(Material.STONE, 1, (short) 0, null);
+        item.setAmount(1);
 
-        // get blocks around tree to find leaves
-        HashMap<Location, Block> leaves = new HashMap<>();
-        for (java.util.Map.Entry<Location, Block> logPairs : tree.entrySet()) {
-            leaves.putAll(getNearBlocks(logPairs.getKey(), 3));
-        }
+        List<Block> downs = new LinkedList();
+        for (int counter = 0; counter < blocks.size(); counter++) {
+            block = (Block) blocks.get(counter);
+            Block down = block.getRelative(BlockFace.DOWN);
+            if ((down.getType() == Material.AIR) || (isLeavesBlock(down.getType()))) {
+                down.setType(block.getType());
 
-        if (tree.size() == 0) {
-            if (breakBlockType.toString().toLowerCase().contains("log")) {
-                leaves.putAll(getNearBlocks(breakBlockLocation, 3));
+                block.setType(Material.AIR);
+                downs.add(down);
             } else {
-                for (int i = 1; i <= 5; i++) {
-                    Location tempLocation = breakBlockLocation.clone().add(0, i, 0);
-                    leaves.put(tempLocation, world.getBlockAt(tempLocation));
+                item.setType(block.getType());
+                item.setDurability((short) block.getData());
+                block.setType(Material.AIR);
+                world.dropItem(block.getLocation(), item);
+                if ((plugin.moreDamageToTools) &&
+                        (breaksTool(player, player.getItemInHand()))) {
+                    player.getInventory().clear(player.getInventory().getHeldItemSlot());
                 }
             }
         }
-
-        leaves.remove(breakBlockLocation);
-
-        // falling leaves
-        for (java.util.Map.Entry<Location, Block> leavesPairs : leaves.entrySet()) {
-            Location leavesLocation = leavesPairs.getKey();
-            Block leavesBlock = leavesPairs.getValue();
-            Material leavesMaterial = leavesBlock.getType();
-            // byte leavesBlockData = leavesBlock.getData();
-            MaterialData leavesBlockData = leavesBlock.getState().getData();
-            if (!leavesMaterial.toString().toLowerCase().contains("leaves"))
-                continue;
-
-            if (treeId == 0 && !leavesBlock.getMetadata("TreeId").isEmpty())
-                continue;
-            leavesBlock.breakNaturally();
-            leavesBlock.removeMetadata("TreeId", plugin);
+        for (int counter = 0; counter < downs.size(); counter++) {
+            block = downs.get(counter);
+            if (isLoneLog(block)) {
+                downs.remove(block);
+                block.breakNaturally();
+                if ((plugin.moreDamageToTools) &&
+                        (breaksTool(player, player.getItemInHand()))) {
+                    player.getInventory().clear(player.getInventory().getHeldItemSlot());
+                }
+            }
         }
+        if (plugin.popLeaves) {
+            moveLeavesDown(blocks);
+        }
+        if (plugin.trees.containsKey(player)) {
+            plugin.trees.remove(player);
+        }
+        if (downs.isEmpty()) {
+            return;
+        }
+        Block[] blockarray = new Block[downs.size()];
+        for (int counter = 0; counter < downs.size(); counter++) {
+            blockarray[counter] = downs.get(counter);
+        }
+        plugin.trees.put(player, blockarray);
     }
 
-    private java.util.Map<Location, Block> getNearBlocks(Location l, int radius) {
-        int lx = l.getBlockX();
-        int ly = l.getBlockY();
-        int lz = l.getBlockZ();
-        World w = l.getWorld();
-        HashMap<Location, Block> m = new HashMap<>();
-        for (int z = lz - radius; z <= lz + radius; z++) {
-            for (int x = lx - radius; x <= lx + radius; x++) {
-                for (int y = ly - radius; y <= ly + radius; y++) {
-                    Location tl = new Location(w, (double) x, (double) y, (double) z);
-                    Block b = w.getBlockAt(tl);
-                    if (tl != l) {
-                        m.put(tl, b);
+    public void moveLeavesDown(List<Block> blocks) {
+        List<Block> leaves = new LinkedList<>();
+        int y = 0;
+        Iterator<Block> blockIterator = blocks.iterator();
+        Block block;
+        while ((blockIterator.hasNext()) && (y < plugin.leafRadius + 1)) {
+            block = blockIterator.next();
+            y = -plugin.leafRadius;
+            for (int x = -plugin.leafRadius; x < plugin.leafRadius + 1; x++) {
+                for (int z = -plugin.leafRadius; z < plugin.leafRadius + 1; z++) {
+                    if ((isLeavesBlock(block.getRelative(x, y, z).getType())) && (!leaves.contains(block.getRelative(x, y, z)))) {
+                        leaves.add(block.getRelative(x, y, z));
                     }
                 }
             }
+            y++;
         }
-        return m;
+        for (Block block : leaves) {
+            if (((block.getRelative(BlockFace.DOWN).getType().equals(Material.AIR)) ||
+                    (isLeavesBlock(block.getRelative(BlockFace.DOWN).getType()))) &&
+                    ((block.getRelative(BlockFace.DOWN, 2).getType().equals(Material.AIR)) ||
+                            (isLeavesBlock(block.getRelative(BlockFace.DOWN, 2).getType())) ||
+                            (isLogBlock(block.getRelative(BlockFace.DOWN, 2).getType()))) && (
+                    (block.getRelative(BlockFace.DOWN, 3).getType().equals(Material.AIR)) ||
+                            (isLeavesBlock(block.getRelative(BlockFace.DOWN, 3).getType())) ||
+                            (isLogBlock(block.getRelative(BlockFace.DOWN, 3).getType())))) {
+                block.getRelative(BlockFace.DOWN).setType(block.getType());
+                block.setType(Material.AIR);
+            } else {
+                block.breakNaturally();
+            }
+        }
     }
 
-    float calcSpeed(float horizontalDistance, float verticalDistance, int horisontalOffset) {
-        float speed = 0;
-        if (verticalDistance > 0) {
-            speed = (horizontalDistance - horisontalOffset) / (float) Math.sqrt(2 * (verticalDistance) / 0.064814);
+    public boolean breaksTool(Player player, ItemStack item) {
+        if ((item != null) &&
+                (isTool(item.getType()))) {
+            short damage = item.getDurability();
+            if (isAxe(item.getType())) {
+                damage = (short) (damage + 1);
+            } else {
+                damage = (short) (damage + 2);
+            }
+            if (damage >= item.getType().getMaxDurability()) {
+                return true;
+            }
+            item.setDurability(damage);
         }
-        return speed;
+        return false;
     }
 
-    private boolean isLightBlock(Material m) {
-        return m.toString().toLowerCase().contains("leaves") || m == Material.AIR || m == Material.TORCH || m.toString().toLowerCase().contains("grass") || m == Material.RED_MUSHROOM || m == Material.VINE || m == Material.SNOW || m == Material.ARROW || m == Material.COCOA || m == Material.LADDER || m == Material.WEB || m.toString().toLowerCase().contains("sapling") || m == Material.WATER;
+    public boolean isTool(Material ID) {
+        if ((ID == Material.IRON_SHOVEL) || (ID == Material.IRON_PICKAXE) || (ID == Material.IRON_AXE) || (ID == Material.IRON_SWORD) || (ID == Material.WOODEN_SWORD) || (ID == Material.WOODEN_SHOVEL) || (ID == Material.WOODEN_PICKAXE) || (ID == Material.WOODEN_AXE) || (ID == Material.STONE_SWORD) || (ID == Material.STONE_SHOVEL) || (ID == Material.STONE_PICKAXE) || (ID == Material.STONE_AXE) || (ID == Material.DIAMOND_SWORD) || (ID == Material.DIAMOND_SHOVEL) || (ID == Material.DIAMOND_PICKAXE) || (ID == Material.DIAMOND_AXE) || (ID == Material.GOLDEN_SWORD) || (ID == Material.GOLDEN_SHOVEL) || (ID == Material.GOLDEN_PICKAXE) || (ID == Material.GOLDEN_AXE)) {
+            return true;
+        }
+        return false;
+    }
+
+    public boolean isAxe(Material ID) {
+        if ((ID == Material.WOODEN_AXE) || (ID == Material.STONE_AXE) || (ID == Material.IRON_AXE) || (ID == Material.DIAMOND_AXE) || (ID == Material.GOLDEN_AXE)) {
+            return true;
+        }
+        return false;
+    }
+
+    public boolean isLoneLog(Block block) {
+        if (isLogBlock(block.getRelative(BlockFace.UP).getType())) {
+            return false;
+        }
+        if (block.getRelative(BlockFace.DOWN).getType() != Material.AIR) {
+            return false;
+        }
+        if (hasHorizontalCompany(block)) {
+            return false;
+        }
+        if (hasHorizontalCompany(block.getRelative(BlockFace.UP))) {
+            return false;
+        }
+        if (hasHorizontalCompany(block.getRelative(BlockFace.DOWN))) {
+            return false;
+        }
+        return true;
+    }
+
+    public boolean hasHorizontalCompany(Block block) {
+        if (isLogBlock(block.getRelative(BlockFace.NORTH).getType())) {
+            return true;
+        }
+        if (isLogBlock(block.getRelative(BlockFace.NORTH_EAST).getType())) {
+            return true;
+        }
+        if (isLogBlock(block.getRelative(BlockFace.EAST).getType())) {
+            return true;
+        }
+        if (isLogBlock(block.getRelative(BlockFace.SOUTH_EAST).getType())) {
+            return true;
+        }
+        if (isLogBlock(block.getRelative(BlockFace.SOUTH).getType())) {
+            return true;
+        }
+        if (isLogBlock(block.getRelative(BlockFace.SOUTH_WEST).getType())) {
+            return true;
+        }
+        if (isLogBlock(block.getRelative(BlockFace.WEST).getType())) {
+            return true;
+        }
+        if (isLogBlock(block.getRelative(BlockFace.NORTH_WEST).getType())) {
+            return true;
+        }
+        return false;
     }
 
 }
