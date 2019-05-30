@@ -38,9 +38,7 @@ import java.util.List;
  */
 public class BlockBreakListener implements Listener {
 
-    public static Player pubPlayer = null;
     private RealisticLumber plugin;
-    private int leafRadius;
 
     public BlockBreakListener(RealisticLumber plugin) {
         this.plugin = plugin;
@@ -70,7 +68,7 @@ public class BlockBreakListener implements Listener {
             event.setCancelled(true);
             if (chop(event.getBlock(), event.getPlayer(), event.getBlock().getWorld())) {
                 if ((!plugin.moreDamageToTools) &&
-                        (breaksTool(event.getPlayer(), event.getPlayer().getItemInHand()))) {
+                        (breaksTool(event.getPlayer(), event.getPlayer().getInventory().getItemInMainHand()))) {
                     event.getPlayer().getInventory().clear(event.getPlayer().getInventory().getHeldItemSlot());
                 }
             } else {
@@ -100,62 +98,62 @@ public class BlockBreakListener implements Listener {
             if (!blocks.contains(block)) {
                 blocks.add(block);
             }
-            getBranches(block, blocks, block.getRelative(BlockFace.NORTH));
-            getBranches(block, blocks, block.getRelative(BlockFace.NORTH_EAST));
-            getBranches(block, blocks, block.getRelative(BlockFace.EAST));
-            getBranches(block, blocks, block.getRelative(BlockFace.SOUTH_EAST));
-            getBranches(block, blocks, block.getRelative(BlockFace.SOUTH));
-            getBranches(block, blocks, block.getRelative(BlockFace.SOUTH_WEST));
-            getBranches(block, blocks, block.getRelative(BlockFace.WEST));
-            getBranches(block, blocks, block.getRelative(BlockFace.NORTH_WEST));
+            getBranches(blocks, block.getRelative(BlockFace.NORTH));
+            getBranches(blocks, block.getRelative(BlockFace.NORTH_EAST));
+            getBranches(blocks, block.getRelative(BlockFace.EAST));
+            getBranches(blocks, block.getRelative(BlockFace.SOUTH_EAST));
+            getBranches(blocks, block.getRelative(BlockFace.SOUTH));
+            getBranches(blocks, block.getRelative(BlockFace.SOUTH_WEST));
+            getBranches(blocks, block.getRelative(BlockFace.WEST));
+            getBranches(blocks, block.getRelative(BlockFace.NORTH_WEST));
             if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH))) {
-                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH));
+                getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH));
             }
             if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_EAST))) {
-                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_EAST));
+                getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_EAST));
             }
             if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST))) {
-                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST));
+                getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST));
             }
             if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_EAST))) {
-                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_EAST));
+                getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_EAST));
             }
             if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH))) {
-                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH));
+                getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH));
             }
             if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_WEST))) {
-                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_WEST));
+                getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_WEST));
             }
             if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST))) {
-                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST));
+                getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST));
             }
             if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_WEST))) {
-                getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_WEST));
+                getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_WEST));
             }
             if ((block.getData() == 3) || (block.getData() == 7) || (block.getData() == 11) || (block.getData() == 15)) {
                 if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH, 2))) {
-                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH, 2));
+                    getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH, 2));
                 }
                 if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_EAST, 2))) {
-                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_EAST, 2));
+                    getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_EAST, 2));
                 }
                 if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST, 2))) {
-                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST, 2));
+                    getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.EAST, 2));
                 }
                 if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_EAST, 2))) {
-                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_EAST, 2));
+                    getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_EAST, 2));
                 }
                 if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH, 2))) {
-                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH, 2));
+                    getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH, 2));
                 }
                 if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_WEST, 2))) {
-                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_WEST, 2));
+                    getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.SOUTH_WEST, 2));
                 }
                 if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST, 2))) {
-                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST, 2));
+                    getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.WEST, 2));
                 }
                 if (!blocks.contains(block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_WEST, 2))) {
-                    getBranches(block, blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_WEST, 2));
+                    getBranches(blocks, block.getRelative(BlockFace.UP).getRelative(BlockFace.NORTH_WEST, 2));
                 }
             }
             if ((blocks.contains(block.getRelative(BlockFace.UP))) || (!isLogBlock(block.getRelative(BlockFace.UP).getType()))) {
@@ -165,7 +163,7 @@ public class BlockBreakListener implements Listener {
         }
     }
 
-    public void getBranches(Block block, List<Block> blocks, Block other) {
+    public void getBranches(List<Block> blocks, Block other) {
         if ((!blocks.contains(other)) && (isLogBlock(other.getType()))) {
             getBlocksToChop(other, getHighestLog(other), blocks);
         }
@@ -215,7 +213,7 @@ public class BlockBreakListener implements Listener {
             return true;
         }
         if (plugin.trees.containsKey(player)) {
-            Block[] blockarray = (Block[]) plugin.trees.get(player);
+            Block[] blockarray = plugin.trees.get(player);
             for (int counter = 0; counter < Array.getLength(blockarray); counter++) {
                 if (blockarray[counter] == block) {
                     return true;
@@ -313,7 +311,7 @@ public class BlockBreakListener implements Listener {
                 popLeaves(block);
             }
             if ((plugin.moreDamageToTools) &&
-                    (breaksTool(player, player.getItemInHand()))) {
+                    (breaksTool(player, player.getInventory().getItemInMainHand()))) {
                 player.getInventory().clear(player.getInventory().getHeldItemSlot());
                 if (plugin.interruptIfToolBreaks) {
                     break;
@@ -354,7 +352,7 @@ public class BlockBreakListener implements Listener {
                 block.setType(Material.AIR);
                 world.dropItem(block.getLocation(), item);
                 if ((plugin.moreDamageToTools) &&
-                        (breaksTool(player, player.getItemInHand()))) {
+                        (breaksTool(player, player.getInventory().getItemInMainHand()))) {
                     player.getInventory().clear(player.getInventory().getHeldItemSlot());
                 }
             }
@@ -365,7 +363,7 @@ public class BlockBreakListener implements Listener {
                 downs.remove(block);
                 block.breakNaturally();
                 if ((plugin.moreDamageToTools) &&
-                        (breaksTool(player, player.getItemInHand()))) {
+                        (breaksTool(player, player.getInventory().getItemInMainHand()))) {
                     player.getInventory().clear(player.getInventory().getHeldItemSlot());
                 }
             }
@@ -403,19 +401,19 @@ public class BlockBreakListener implements Listener {
             }
             y++;
         }
-        for (Block block : leaves) {
-            if (((block.getRelative(BlockFace.DOWN).getType().equals(Material.AIR)) ||
-                    (isLeavesBlock(block.getRelative(BlockFace.DOWN).getType()))) &&
-                    ((block.getRelative(BlockFace.DOWN, 2).getType().equals(Material.AIR)) ||
-                            (isLeavesBlock(block.getRelative(BlockFace.DOWN, 2).getType())) ||
-                            (isLogBlock(block.getRelative(BlockFace.DOWN, 2).getType()))) && (
-                    (block.getRelative(BlockFace.DOWN, 3).getType().equals(Material.AIR)) ||
-                            (isLeavesBlock(block.getRelative(BlockFace.DOWN, 3).getType())) ||
-                            (isLogBlock(block.getRelative(BlockFace.DOWN, 3).getType())))) {
-                block.getRelative(BlockFace.DOWN).setType(block.getType());
-                block.setType(Material.AIR);
+        for (Block b : leaves) {
+            if (((b.getRelative(BlockFace.DOWN).getType().equals(Material.AIR)) ||
+                    (isLeavesBlock(b.getRelative(BlockFace.DOWN).getType()))) &&
+                    ((b.getRelative(BlockFace.DOWN, 2).getType().equals(Material.AIR)) ||
+                            (isLeavesBlock(b.getRelative(BlockFace.DOWN, 2).getType())) ||
+                            (isLogBlock(b.getRelative(BlockFace.DOWN, 2).getType()))) && (
+                    (b.getRelative(BlockFace.DOWN, 3).getType().equals(Material.AIR)) ||
+                            (isLeavesBlock(b.getRelative(BlockFace.DOWN, 3).getType())) ||
+                            (isLogBlock(b.getRelative(BlockFace.DOWN, 3).getType())))) {
+                b.getRelative(BlockFace.DOWN).setType(b.getType());
+                b.setType(Material.AIR);
             } else {
-                block.breakNaturally();
+                b.breakNaturally();
             }
         }
     }
